@@ -1,4 +1,12 @@
+# Quick commands
+```
+python tools/demo/demo.py --video=./jump.mp4
+
+python global_viser_vis.py  --result_pt ./outputs/demo/jump/hmr4d_results.pt
+```
+
 # GVHMR: World-Grounded Human Motion Recovery via Gravity-View Coordinates
+
 ### [Project Page](https://zju3dv.github.io/gvhmr) | [Paper](https://arxiv.org/abs/2409.06662)
 
 > World-Grounded Human Motion Recovery via Gravity-View Coordinates  
