@@ -1,8 +1,16 @@
 # Quick commands
 ```
+# single person rendering to video
 python tools/demo/demo.py --video=./jump.mp4
 
+# multi person rendering to video
+python tools/demo/demo_multi.py --video=./jump.mp4
+
+# single person 3D visualization in Viser
 python global_viser_vis.py  --result_pt ./outputs/demo/jump/hmr4d_results.pt
+
+# multi person 3D visualization in Viser
+python mp_gloval_viser_vis.py  --result_pt ./outputs/demo/jump/hmr4d_results.pt
 ```
 
 # GVHMR: World-Grounded Human Motion Recovery via Gravity-View Coordinates

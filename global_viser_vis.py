@@ -43,7 +43,6 @@ def main(sid: int = 0, result_pt: str = None):
     smpl_faces = make_smplx("smpl").faces
     J_regressor = torch.load("hmr4d/utils/body_model/smpl_neutral_J_regressor.pt").cuda()
 
-
     # smpl
     smplx_out = smplx(**to_cuda(pred["smpl_params_global"]))
     pred_ay_verts = torch.stack([torch.matmul(smplx2smpl, v_) for v_ in smplx_out.vertices])
@@ -107,24 +106,24 @@ def main(sid: int = 0, result_pt: str = None):
     cam_origin_world[..., 1] = cam_origin_world[..., 1] - ground_y
     # slam_cam_origin_world[..., 1] = slam_cam_origin_world[..., 1] - ground_y
 
-    # scale of DVPO is unknown
-    # from slam_cam_origin_world, find an index where the 3d coordinate changes
-    # then, use the scale of the first frame to scale the rest of the frames
-    diff_idx_list = [0]
-    for i in range(1, len(slam_cam_origin_world)):
-        if onp.linalg.norm(slam_cam_origin_world[i] - slam_cam_origin_world[i-1]) > 1e-3:
-            diff_idx_list.append(i)
+    # # scale of DVPO is unknown
+    # # from slam_cam_origin_world, find an index where the 3d coordinate changes
+    # # then, use the scale of the first frame to scale the rest of the frames
+    # diff_idx_list = [0]
+    # for i in range(1, len(slam_cam_origin_world)):
+    #     if onp.linalg.norm(slam_cam_origin_world[i] - slam_cam_origin_world[i-1]) > 1e-3:
+    #         diff_idx_list.append(i)
 
-    # average the scale o
-    scale_list = []        
-    for i in range(1, len(diff_idx_list)):
-        scale = onp.linalg.norm(cam_origin_world[diff_idx_list[i-1]] - cam_origin_world[diff_idx_list[i]]) / onp.linalg.norm(slam_cam_origin_world[diff_idx_list[i-1]] - slam_cam_origin_world[diff_idx_list[i]])
-        scale_list.append(scale)
+    # # average the scale o
+    # scale_list = []        
+    # for i in range(1, len(diff_idx_list)):
+    #     scale = onp.linalg.norm(cam_origin_world[diff_idx_list[i-1]] - cam_origin_world[diff_idx_list[i]]) / onp.linalg.norm(slam_cam_origin_world[diff_idx_list[i-1]] - slam_cam_origin_world[diff_idx_list[i]])
+    #     scale_list.append(scale)
 
-    scale = onp.mean(scale_list, axis=0, keepdims=True)
+    # scale = onp.mean(scale_list, axis=0, keepdims=True)
 
-    slam_cam_origin_world = slam_cam_origin_world * scale
-    slam_cam_origin_world = slam_cam_origin_world - slam_cam_origin_world[0:1] + cam_origin_world[0:1]
+    # slam_cam_origin_world = slam_cam_origin_world * scale
+    # slam_cam_origin_world = slam_cam_origin_world - slam_cam_origin_world[0:1] + cam_origin_world[0:1]
 
     # trick scaling
     # cam_origin_world[..., 2] = cam_origin_world[..., 2] * 0.3
