@@ -4,6 +4,14 @@ import numpy as np
 from hmr4d.utils.wis3d_utils import get_colors_by_conf
 
 
+def get_color_for_sid(sid):
+    # Simple hash function to generate a color
+    hash_value = sid * 123456789 + 111111111
+    r = (hash_value & 0xFF0000) >> 16
+    g = (hash_value & 0x00FF00) >> 8
+    b = hash_value & 0x0000FF
+    return (b, g, r)
+
 def to_numpy(x):
     if isinstance(x, np.ndarray):
         return x.copy()
@@ -37,15 +45,17 @@ def draw_bbx_xys_on_image_batch(bbx_xys_batch, image_batch, conf=None):
     return image_batch_out
 
 
-def draw_bbx_xyxy_on_image(bbx_xys, image, conf=True):
+def draw_bbx_xyxy_on_image(bbx_xys, image, conf=True, sid=None):
     bbx_xys = to_numpy(bbx_xys)
     image = to_numpy(image)
     color = (255, 178, 102) if conf == True else (128, 128, 128)  # orange or gray
+    if sid is not None:
+        color = get_color_for_sid(sid)
     image = cv2.rectangle(image, (int(bbx_xys[0]), int(bbx_xys[1])), (int(bbx_xys[2]), int(bbx_xys[3])), color, 2)
     return image
 
 
-def draw_bbx_xyxy_on_image_batch(bbx_xyxy_batch, image_batch, mask=None, conf=None):
+def draw_bbx_xyxy_on_image_batch(bbx_xyxy_batch, image_batch, mask=None, conf=None, sid=None):
     """
     Args:
         conf: if provided, list of bool, mutually exclusive with mask
@@ -58,14 +68,15 @@ def draw_bbx_xyxy_on_image_batch(bbx_xyxy_batch, image_batch, mask=None, conf=No
     use_conf = conf is not None
     bbx_xyxy_batch = to_numpy(bbx_xyxy_batch)
     image_batch = to_numpy(image_batch)
+
     assert len(bbx_xyxy_batch) == len(image_batch)
     image_batch_out = []
     for i in range(len(bbx_xyxy_batch)):
         if use_conf:
-            image_batch_out.append(draw_bbx_xyxy_on_image(bbx_xyxy_batch[i], image_batch[i], conf[i]))
+            image_batch_out.append(draw_bbx_xyxy_on_image(bbx_xyxy_batch[i], image_batch[i], conf[i], sid[i]))
         else:
             if mask is None or mask[i]:
-                image_batch_out.append(draw_bbx_xyxy_on_image(bbx_xyxy_batch[i], image_batch[i]))
+                image_batch_out.append(draw_bbx_xyxy_on_image(bbx_xyxy_batch[i], image_batch[i], sid=sid[i]))
             else:
                 image_batch_out.append(image_batch[i])
     return image_batch_out

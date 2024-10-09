@@ -568,6 +568,10 @@ def compute_cam_angvel(R_w2c, padding_last=True):
     """
     R_w2c : (F, 3, 3)
     """
+    # hongsuk
+    if len(R_w2c) == 1:
+        return matrix_to_rotation_6d(R_w2c @ R_w2c.transpose(-1, -2))
+        
     # R @ R0 = R1, so R = R1 @ R0^T
     cam_angvel = matrix_to_rotation_6d(R_w2c[1:] @ R_w2c[:-1].transpose(-1, -2))  # (F-1, 6)
     # cam_angvel = (cam_angvel - torch.tensor([[1, 0, 0, 0, 1, 0]])) * FPS
