@@ -108,6 +108,9 @@ def run_preprocess(cfg):
         tracker = Tracker()
         multi_bbx_xyxy = tracker.get_multi_track(video_path)
         
+        num_humans = len(multi_bbx_xyxy)
+        Log.info(f"[Detection] Number of humans detected: {num_humans}")
+        
         for tracking_id, tracking_data in multi_bbx_xyxy.items():
             bbx_xyxy = tracking_data['bbx_xyxy'].float()  # (L, 4)
             bbx_xys = get_bbx_xys_from_xyxy(bbx_xyxy, base_enlarge=1.2).float()  # (L, 3) apply aspect ratio and enlarge
@@ -451,6 +454,33 @@ def render_global(cfg):
         writer.write_frame(img)
     writer.close()
 
+def convert_axis_angle_to_matrix(body_pose):
+    """
+    Convert axis-angle representation to rotation matrix.
+    Args:
+        body_pose: (B, F, 63) or (F, 63) tensor
+    Returns:
+        body_pose_matrix: (B, F, 23, 3, 3) or (F, 23, 3, 3) tensor
+    """
+    batch_size = body_pose.shape[0] if len(body_pose.shape) == 3 else None
+    seq_len = body_pose.shape[-2]
+    
+    # Reshape to (B*F, 21, 3) or (F, 21, 3)
+    body_pose_reshape = body_pose.reshape(-1, 21, 3)
+    
+    # Convert to rotation matrix
+    from pytorch3d.transforms import axis_angle_to_matrix
+    body_pose_matrix = axis_angle_to_matrix(body_pose_reshape)  # (B*F, 21, 3, 3)
+    
+    # Reshape back
+    if batch_size is not None:
+        body_pose_matrix = body_pose_matrix.reshape(batch_size, seq_len, 21, 3, 3)
+    else:
+        body_pose_matrix = body_pose_matrix.reshape(seq_len, 21, 3, 3)
+    
+    return body_pose_matrix
+
+from pytorch3d.transforms import axis_angle_to_matrix
 
 if __name__ == "__main__":
     cfg = parse_args_to_cfg()
@@ -462,27 +492,85 @@ if __name__ == "__main__":
     run_preprocess(cfg)
     data_dict = load_data_dict(cfg)
 
-    # ===== HMR4D ===== #
-    total_pred = {}
-    if not Path(paths.hmr4d_results).exists():
-        Log.info("[HMR4D] Predicting")
-        model: DemoPL = hydra.utils.instantiate(cfg.model, _recursive_=False)
-        model.load_pretrained_model(cfg.ckpt_path)
-        model = model.eval().cuda()
+    # # ===== HMR4D ===== #
+    # total_pred = {}
+    # if not Path(paths.hmr4d_results).exists():
+    #     Log.info("[HMR4D] Predicting")
+    #     model: DemoPL = hydra.utils.instantiate(cfg.model, _recursive_=False)
+    #     model.load_pretrained_model(cfg.ckpt_path)
+    #     model = model.eval().cuda()
         
-        for tracking_id, data in data_dict.items():
-            tic = Log.sync_time()
-            pred = model.predict(data, static_cam=cfg.static_cam)
-            pred = detach_to_cpu(pred)
-            total_pred[tracking_id] = pred
-            data_time = data["length"] / 30
-            Log.info(f"[HMR4D] Elapsed: {Log.sync_time() - tic:.2f}s for data-length={data_time:.1f}s")
-        torch.save(total_pred, paths.hmr4d_results)
-    else:
-        total_pred = torch.load(paths.hmr4d_results)
-        Log.info(f"[HMR4D] Predicting results from {paths.hmr4d_results}")
+    #     for tracking_id, data in data_dict.items():
+    #         tic = Log.sync_time()
+    #         pred = model.predict(data, static_cam=cfg.static_cam)
+    #         pred = detach_to_cpu(pred)
+    #         total_pred[tracking_id] = pred
+    #         data_time = data["length"] / 30
+    #         Log.info(f"[HMR4D] Elapsed: {Log.sync_time() - tic:.2f}s for data-length={data_time:.1f}s")
+    #     torch.save(total_pred, paths.hmr4d_results)
+    # else:
+    #     total_pred = torch.load(paths.hmr4d_results)
+    #     Log.info(f"[HMR4D] Predicting results from {paths.hmr4d_results}")
+    # # ===== Render ===== #
+    # render_incam(cfg)
+    # # render_global(cfg)
+    # # if not Path(paths.incam_global_horiz_video).exists():
+    # #     Log.info("[Merge Videos]")
+    # #     merge_videos_horizontal([paths.incam_video, paths.global_video], paths.incam_global_horiz_video)
+
+# ===== HMR4D ===== #
+    total_pred = {}
+    # if not Path(paths.hmr4d_results).exists():
+    Log.info("[HMR4D] Predicting")
+    model: DemoPL = hydra.utils.instantiate(cfg.model, _recursive_=False)
+    model.load_pretrained_model(cfg.ckpt_path)
+    model = model.eval().cuda()
+    
+    all_body_pose_matrices = []
+    for tracking_id, data in data_dict.items():
+        tic = Log.sync_time()
+        pred = model.predict(data, static_cam=cfg.static_cam)
+
+        body_pose_aa = torch.tensor(pred["smpl_params_global"]["body_pose"]).reshape(-1, 21, 3)  # (N, 21, 3)
+        body_pose_matrix = axis_angle_to_matrix(body_pose_aa)  # (N, 21, 3, 3)
+        
+        # 3. 添加两个手腕关节的默认旋转（单位矩阵）
+        N = body_pose_matrix.shape[0]
+        identity = torch.eye(3).unsqueeze(0).expand(N, 2, 3, 3).to(body_pose_matrix.device)  # (N, 2, 3, 3)
+        body_pose_matrix_full = torch.cat([body_pose_matrix, identity], dim=1)  # (N, 23, 3, 3)
+        body_pose_matrix_full.unsqueeze(1)
+        all_body_pose_matrices.append(body_pose_matrix_full)
+        
+        pred = detach_to_cpu(pred)
+        total_pred[tracking_id] = pred
+        data_time = data["length"] / 30
+        Log.info(f"[HMR4D] Elapsed: {Log.sync_time() - tic:.2f}s for data-length={data_time:.1f}s")
+    
+    # 获取所有序列的最大长度
+    max_length = max([matrix.shape[0] for matrix in all_body_pose_matrices])
+    
+    # 将所有序列填充到最大长度
+    padded_matrices = []
+    for matrix in all_body_pose_matrices:
+        curr_length = matrix.shape[0]
+        if curr_length < max_length:
+            # 创建填充矩阵
+            padding = torch.zeros((max_length - curr_length, *matrix.shape[1:]), device=matrix.device)
+            padded_matrix = torch.cat([matrix, padding], dim=0)
+        else:
+            padded_matrix = matrix
+        padded_matrices.append(padded_matrix)
+    
+    # 在维度1上拼接所有填充后的矩阵
+    all_body_pose_matrices = torch.stack(padded_matrices, dim=1)  # (max_length, num_sequences, 21, 3, 3)
+    print(all_body_pose_matrices.shape)
+    torch.save(all_body_pose_matrices, paths.hmr4d_results)
+    # else:
+    #     total_pred = torch.load(paths.hmr4d_results)
+    #     Log.info(f"[HMR4D] Predicting results from {paths.hmr4d_results}")
     # ===== Render ===== #
-    render_incam(cfg)
+    # render_incam(cfg)
+
     # render_global(cfg)
     # if not Path(paths.incam_global_horiz_video).exists():
     #     Log.info("[Merge Videos]")

@@ -38,13 +38,7 @@ class SmplxLite(nn.Module):
         self.register_fast_skeleton_computing_buffers()
 
         # default_pose (99,) for torch.cat([global_orient, body_pose, default_pose])
-        other_default_pose = torch.cat(
-            [
-                torch.zeros(9),
-                to_tensor(data_struct.hands_meanl).float(),
-                to_tensor(data_struct.hands_meanr).float(),
-            ]
-        )
+        other_default_pose = torch.zeros(99)
         self.register_buffer("other_default_pose", other_default_pose, False)
 
     def register_smpl_buffers(self, data_struct, num_betas):

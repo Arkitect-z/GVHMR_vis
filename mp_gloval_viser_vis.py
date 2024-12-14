@@ -203,7 +203,7 @@ def main(sid: int = 0, result_pt: str = None):
         frame_nodes.append(server.scene.add_frame(f"/t{t}", show_axes=False))
         
         cam_axes_matrix = data_frames[t]['ref_cam_axes']
-        cam_axes_quat = R.from_matrix(cam_axes_matrix).as_quat(scalar_first=True)
+        cam_axes_quat = R.from_matrix(cam_axes_matrix).as_quat()
         cam_origin = data_frames[t]['ref_cam_origin'] - ground_y
         server.scene.add_frame(
             f"/t{t}/cam",
